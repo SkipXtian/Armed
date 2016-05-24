@@ -1,7 +1,8 @@
+//testMode Branch
+
+#include "as5048a.h"
 #include "math.h"
 #include "pins.h"
-#include <Wire.h> 
-#include <LiquidCrystal_I2C.h>
 
 //FOREARM_DIR HIGH = Back, LOW = Forward
 //MAINARM_DIR HIGH = Forward, LOW = Back
@@ -10,11 +11,9 @@
  * gotoHome() Moves ForeArm to back limit switch then forward 4325 steps, then moves mainArm back to meet ForeArm. MainArm is vertical.
  */
 
+AS5048A angleSensor(53);
+
 #define BACKLIGHT_PIN     13
-
-
-LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
-
 
 #define ENABLE_STEPPER_DRIVER_INTERRUPT()  TIMSK1 |= (1<<OCIE1A)
 #define DISABLE_STEPPER_DRIVER_INTERRUPT() TIMSK1 &= ~(1<<OCIE1A)
@@ -23,38 +22,32 @@ int foreArmSteps, mainArmSteps, rotationalSteps;
 int foreArmTarget, mainArmTarget, rotationalTarget;
 int foreArmPos, mainArmPos, rotationalPos;
 
-int halfStepDurationMS = 900;                          // Calculated value to set 1/2 step pulse timer (mS x 2)   
+int halfStepDurationMS = 1200;                          // Calculated value to set 1/2 step pulse timer (mS x 2)   
                                             
 long stepsLeft = 0;                                  // Number of Steps
 boolean running = false;                             // Arm moving?
 
-
+long timeNow = 0;
+long cycleTime = 1000;
 //int xPos, yPos, zPos;
 
 void setup() 
 {  
   initSteppers();
-  initEndstops();
+  //initEndstops();
+  angleSensor.init();
 
   Serial.begin(115200);
   Serial.setTimeout(10);
   Serial.println("#project Armed");
-  Serial.println("Enter \"X,Y,Z\"");
+  Serial.println("Enter m=MainArm,f=ForeArm,s=Step speed, e=enable/disable");
 
 
   setTimer1(halfStepDurationMS); 
   
-  
+ 
 
-  // Switch on the backlight
-  pinMode ( BACKLIGHT_PIN, OUTPUT );
-  digitalWrite ( BACKLIGHT_PIN, HIGH );
-  
-  lcd.begin(16,2);               // initialize the lcd 
-  lcd.home ();                   // go home
-  lcd.print("Armed - by Skip");
-
-  gotoHome();
+  //gotoHome();
   //test90();
   //foreArmPos = -1075;
   //mainArmPos = 0;
@@ -97,8 +90,57 @@ void drawSquare()
 
 void loop () 
 {
+  static boolean lastRunState = false;
+  if(running != lastRunState){
+    Serial.println("Move Complete");   
+    if(lastRunState == true){
+    steppersEnabled(false);
+    }
+    lastRunState = running;
+  }
   //drawSquare();
   if(Serial.available()){
+    char cmd = Serial.read();
+    int amount = Serial.parseInt();
+    
+    Serial.print(amount);
+    Serial.println(cmd);
+    if(cmd == 'm'){
+        
+        //digitalWrite(MAINARM_ENABLE_PIN    , LOW);
+      boolean targetDir = (amount >= 0)? LOW:HIGH;    
+      digitalWrite(MAINARM_DIR_PIN,targetDir);
+      mainArmSteps = amount;
+      mainArmSteps = abs(mainArmSteps);
+      Serial.print("Moving steps: "); Serial.print(mainArmSteps);
+      running = true;
+      steppersEnabled(true);
+      ENABLE_STEPPER_DRIVER_INTERRUPT();
+      //while(running==true){}     
+      Serial.print("DONE with halfStepDurationMS set to "); Serial.print(halfStepDurationMS);
+      //digitalWrite(MAINARM_ENABLE_PIN    , HIGH);
+    } else if(cmd == 'f'){
+      //digitalWrite(FOREARM_ENABLE_PIN    , LOW);
+      boolean targetDir = (amount >= 0)? LOW:HIGH;    
+      digitalWrite(FOREARM_DIR_PIN,targetDir);
+      foreArmSteps = amount;
+      foreArmSteps = abs(foreArmSteps);
+      Serial.print("Moving steps: "); Serial.print(foreArmSteps);
+      running = true;
+      steppersEnabled(true);
+      ENABLE_STEPPER_DRIVER_INTERRUPT();
+      //while(running==true){}     
+      Serial.print("DONE with halfStepDurationMS set to "); Serial.print(halfStepDurationMS);
+      //digitalWrite(FOREARM_ENABLE_PIN    , HIGH);
+    } else if(cmd == 's'){
+      halfStepDurationMS = amount;
+      setTimer1(halfStepDurationMS);
+      Serial.print("halfStepDurationMS set to "); Serial.println(halfStepDurationMS);
+    } else if(cmd == 'e'){
+      steppersEnabled(false);
+    }
+    
+    /*
     int getForeArmTarget = Serial.parseInt();
     int getMainArmTarget = Serial.parseInt();
     int getRotationalTarget = Serial.parseInt();
@@ -109,9 +151,14 @@ void loop ()
     Serial.println(getRotationalTarget);  
     Serial.println("Moving Steppers To...");
     
-    goDirectlyTo(getForeArmTarget,getMainArmTarget,getRotationalTarget);    
+    goDirectlyTo(getForeArmTarget,getMainArmTarget,getRotationalTarget);   
+    */ 
   }
-  
+  if(millis() - timeNow > cycleTime){
+      angleSensor.getRawRotation();
+      
+      timeNow = millis();
+    }
   /*static bool travel = 1;
   if(!running) {
     if(travel) {
@@ -150,11 +197,6 @@ void gotoHome()
     delayMicroseconds(dTime);
   }
 
-  lcd.home (); // go home
-  lcd.clear();
-  lcd.print("fSteps= 0");  
-  lcd.setCursor ( 0, 1 );        // go to the next line
-  lcd.print ("mSteps= 0");
   foreArmSteps = 0;
   mainArmSteps = 0;  
 
@@ -182,11 +224,6 @@ void gotoHome()
     }
   }
   
-  lcd.home ();                   // go home
-  lcd.clear();
-  lcd.print("fSteps= ");  lcd.print(foreArmSteps);
-  lcd.setCursor ( 0, 1 );        // go to the next line
-  lcd.print ("mSteps= ");  lcd.print(mainArmSteps);
 
   digitalWrite(MAINARM_DIR_PIN    , LOW);
   while(digitalRead(FOREARM_MAX_PIN)) {  

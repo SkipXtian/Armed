@@ -68,8 +68,8 @@ ISR(TIMER1_COMPA_vect)
   }
   if (foreArmSteps == 0 && mainArmSteps == 0) {                             
     running = false;
-    foreArmPos = foreArmTarget;
-    mainArmPos = mainArmTarget;
+    //foreArmPos = foreArmTarget;
+    //mainArmPos = mainArmTarget;
     DISABLE_STEPPER_DRIVER_INTERRUPT();
   }
 }
@@ -108,14 +108,17 @@ void initSteppers()
   pinMode(Q_ENABLE_PIN    , OUTPUT);
   */
   
-  digitalWrite(FOREARM_ENABLE_PIN    , LOW);
-  digitalWrite(MAINARM_ENABLE_PIN    , LOW);
-  digitalWrite(ROTATION_ENABLE_PIN    , LOW);
+  steppersEnabled(true);
   //digitalWrite(E_ENABLE_PIN    , LOW);
   //digitalWrite(Q_ENABLE_PIN    , LOW);
 }
 
-
+void steppersEnabled(boolean state)
+{
+  digitalWrite(FOREARM_ENABLE_PIN    , !state);
+  digitalWrite(MAINARM_ENABLE_PIN    , !state);
+  digitalWrite(ROTATION_ENABLE_PIN    , !state);
+}
 
 void setTimer1(int timeCompare)
 {
