@@ -24,9 +24,10 @@
 //Stepper Controller ISR
 ISR(TIMER1_COMPA_vect)
 {
+  static float hyst = 0.25;
   volatile static bool foreArmStepped = 1;
   volatile static bool mainArmStepped = 1;
-  if(foreArmSteps > 0){
+  if(foreArmTarget <= (foreArmPos - hyst) || foreArmTarget >= (foreArmPos + hyst)){ //foreArmSteps > 0){
     /*if(stepsLeft == downCounter){  
       downCounter--;
       OCR1A += accelDelta;         // Deccerate
@@ -43,10 +44,13 @@ ISR(TIMER1_COMPA_vect)
     } else {
       digitalWrite(FOREARM_STEP_PIN, LOW);   
       foreArmStepped = !foreArmStepped;
-      foreArmSteps--;
+      //foreArmSteps--;
     }   
+    boolean targetDir = (foreArmTarget > foreArmPos)? HIGH:LOW;    
+    //boolean targetDir = (degreeElbow > foreArmPos)? LOW:HIGH;    
+    digitalWrite(FOREARM_DIR_PIN,targetDir);
   } 
-  if(mainArmSteps > 0){
+  if(mainArmTarget <= (mainArmPos - hyst) || mainArmTarget >= (mainArmPos + hyst)){
     /*if(stepsLeft == downCounter){  
       downCounter--;
       OCR1A += accelDelta;         // Deccerate
@@ -63,10 +67,14 @@ ISR(TIMER1_COMPA_vect)
     } else {
       digitalWrite(MAINARM_STEP_PIN, LOW);   
       mainArmStepped = !mainArmStepped;
-      mainArmSteps--;
+      //mainArmSteps--;
     }   
+    boolean targetDir = (mainArmTarget > mainArmPos)? LOW:HIGH;
+    //targetDir = (degreeShoulder > mainArmPos)? HIGH:LOW;
+    digitalWrite(MAINARM_DIR_PIN,targetDir);
   }
-  if (foreArmSteps == 0 && mainArmSteps == 0) {                             
+  //if (foreArmTarget == foreArmPos && mainArmTarget == mainArmPos) {    
+  if (foreArmTarget >= (foreArmPos - hyst) && foreArmTarget <= (foreArmPos + hyst) && mainArmTarget >= (mainArmPos - hyst) && mainArmTarget <= (mainArmPos + hyst)) {                          
     running = false;
     //foreArmPos = foreArmTarget;
     //mainArmPos = mainArmTarget;

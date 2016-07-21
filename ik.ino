@@ -1,5 +1,5 @@
 
-float MAINARM_LENGTH=187; //Shoulder to elbow length
+float MAINARM_LENGTH=197; //Shoulder to elbow length
 float FOREARM_LENGTH=203; //Elbow to wrist length
 float GRIPPER_OFFSET=0;  //Length from wrist to hand PLUS base centre to shoulder (BACK BOLT FOR TESTING)
 
@@ -17,37 +17,47 @@ void goDirectlyTo(float x, float y, float z)
 {
   float degreeBase,degreeShoulder,degreeElbow;
   if (solve(x, y, z, degreeBase, degreeShoulder, degreeElbow)) {
-    
+  Serial.print(degreeBase);
+  Serial.print(" : ");
+  Serial.print(degreeElbow);
+  Serial.print(" : ");
+  Serial.print(degreeShoulder);
+    /*
     rotationalTarget = int(degreeBase/0.015);
     mainArmTarget = int(degreeShoulder/0.015);
     foreArmTarget = int(degreeElbow/0.015);
-    
+    */
+    mainArmTarget = degreeShoulder;
+    foreArmTarget = degreeElbow;
     //Set foreArm direction and calculate steps
-    boolean targetDir = (foreArmTarget > foreArmPos)? LOW:HIGH;    
+    boolean targetDir = (foreArmTarget > foreArmPos)? HIGH:LOW;    
+    //boolean targetDir = (degreeElbow > foreArmPos)? LOW:HIGH;    
     digitalWrite(FOREARM_DIR_PIN,targetDir);
     
-    foreArmSteps = foreArmTarget - foreArmPos;
-    foreArmSteps = abs(foreArmSteps);
+    //foreArmSteps = foreArmTarget - foreArmPos;
+    //foreArmSteps = abs(foreArmSteps);
     
-    Serial.print("fArm Dir = "); Serial.println(targetDir);
-    Serial.print("fArm Steps = "); Serial.println(foreArmSteps);
+    //Serial.print("fArm Dir = "); Serial.println(targetDir);
+    //Serial.print("fArm Steps = "); Serial.println(foreArmSteps);
 
     //Set foreArm direction and calculate steps
-    targetDir = (mainArmTarget > mainArmPos)? HIGH:LOW;
+    targetDir = (mainArmTarget > mainArmPos)? LOW:HIGH;
+    //targetDir = (degreeShoulder > mainArmPos)? HIGH:LOW;
     digitalWrite(MAINARM_DIR_PIN,targetDir);
     
-    mainArmSteps = mainArmTarget - mainArmPos;
-    mainArmSteps = abs(mainArmSteps);
+    //mainArmSteps = mainArmTarget - mainArmPos;
+    //mainArmSteps = abs(mainArmSteps);
     
-    Serial.print("mArm Dir = "); Serial.println(targetDir);
-    Serial.print("mArm Steps = "); Serial.println(mainArmSteps);
+    //Serial.print("mArm Dir = "); Serial.println(targetDir);
+    //Serial.print("mArm Steps = "); Serial.println(mainArmSteps);
 
-    if(foreArmSteps != 0 || mainArmSteps != 0){
+    if(foreArmTarget != foreArmPos || mainArmTarget != mainArmPos){
       running = true;
+      steppersEnabled(true);
       ENABLE_STEPPER_DRIVER_INTERRUPT();
     }
     
-    _x = x; _y = y; _z = z;
+    /*_x = x; _y = y; _z = z; */
   } else {
     Serial.println("Not within Range");
   }

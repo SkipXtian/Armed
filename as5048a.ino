@@ -4,7 +4,8 @@
  * Sets up the SPI interface
  */
 void AS5048Ainit(){
-  setZeroPosition(13750, 8530);
+  //setZeroPosition(14336, 8204); //13750, 8880
+  setZeroPosition(14336, 9600);
   // 1MHz clock (AMS should be able to accept up to 10MHz)
   settings = SPISettings(1000000, MSBFIRST, SPI_MODE1);
   
@@ -13,6 +14,11 @@ void AS5048Ainit(){
 
   //SPI has an internal SPI-device counter, it is possible to call "begin()" from different devices
   SPI.begin();
+  delay(200);
+  getRawAngles();
+  getRawAngles();
+  getRawAngles();
+
 }
 
 /**
@@ -39,6 +45,15 @@ byte spiCalcEvenParity(word value){
     value >>= 1;
   }
   return cnt & 0x1;
+}
+
+void getRawAngles(){
+  word fArmAngle = 0;
+  word mArmAngle = 0;
+  getArmAngles(&fArmAngle,&mArmAngle);
+  Serial.print(fArmAngle);
+  Serial.print(" : ");
+  Serial.println(mArmAngle);
 }
 
 void getArmAngles(word *_foreArmAngle, word *_mainArmAngle){
@@ -91,16 +106,86 @@ void getRotation(){
   //int rotation;
   word foreArmAngle, mainArmAngle;
   getArmAngles(&foreArmAngle, &mainArmAngle);
-  int fArmRotation = (int)foreArmAngle - (int)foreArmPosition;
-  if(fArmRotation > 8191) fArmRotation = -((0x3FFF)-fArmRotation); //more than -180
+  
+  int fArmRotation;
+  if(foreArmAngle<13750) {
+    if(foreArmAngle < 5558) { 
+      fArmRotation = (2634+foreArmAngle)*-1;
+    } else {
+      fArmRotation= 13750 - foreArmAngle;
+    }
+  } else {
+    fArmRotation=(foreArmAngle - 13750)*-1;
+  }
+  //Serial.print(angle);
+  //Serial.print(" : ");
+  //Serial.print(foreArmAngle);
+  //Serial.print(" : ");
+  //int fArmRotation = (int)foreArmAngle - (int)foreArmPosition;
+  //Serial.print(fArmRotation);
+  //Serial.print(" : ");
+  //if(fArmRotation > 8191) fArmRotation = -((0x3FFF)-fArmRotation); //more than -180
   //if(rotation < -0x1FFF) rotation = rotation+0x3FFF;
   int mArmRotation = (int)mainArmAngle - (int)mainArmPosition;
   if(mArmRotation > 8191) mArmRotation = -((0x3FFF)-mArmRotation); //more than -180
   //return rotation;
-  Serial.print(fArmRotation*-1);
-  Serial.print(" : ");
-  Serial.println(mArmRotation);
+  //Serial.print(1.0 * fArmRotation / 45.5);
+  //Serial.print(" : ");
+  //Serial.print(mArmRotation);
+  //Serial.print(" : ");
+  //Serial.println(1.0 * mArmRotation / 45.5);
+  //Serial.print(" : ");
+  //Serial.print(mArmRotation % 45.5);
+  averageAngleFilter((1.0 * fArmRotation / 45.5), (1.0 * mArmRotation / 45.5));
 }
+
+/*
+ * long runningAverage(int M) {
+  #define LM_SIZE 10
+  static int LM[LM_SIZE];      // LastMeasurements
+  static byte index = 0;
+  static long sum = 0;
+  static byte count = 0;
+
+  // keep sum updated to improve speed.
+  sum -= LM[index];
+  LM[index] = M;
+  sum += LM[index];
+  index++;
+  index = index % LM_SIZE;
+  if (count < LM_SIZE) count++;
+
+  return sum / count;
+}
+
+foreArmPos
+ */
+
+void averageAngleFilter(float fArm, float mArm){
+  #define numberSamples 10
+  static float mainArmAngleAvg[numberSamples];
+  static float foreArmAngleAvg[numberSamples];
+  static byte index = 0;
+  static float fArmSum = 0;
+  static float mArmSum = 0;
+  static byte count = 0;
+  
+  fArmSum -= foreArmAngleAvg[index];
+  mArmSum -= mainArmAngleAvg[index];
+  foreArmAngleAvg[index] = fArm;
+  mainArmAngleAvg[index] = mArm;
+  fArmSum += foreArmAngleAvg[index];
+  mArmSum += mainArmAngleAvg[index];
+  index++;
+  index = index % numberSamples;
+  if (count < numberSamples) count++;
+
+  foreArmPos = fArmSum / count;
+  mainArmPos = mArmSum / count;
+
+}
+
+
 /*
  * Set the zero position
  */

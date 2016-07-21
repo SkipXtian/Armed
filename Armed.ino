@@ -7,6 +7,17 @@
 SPISettings settings;
 #define _cs 53
 word foreArmPosition, mainArmPosition;
+
+/*
+mainArm       Max Forward 3400;
+foreArm       Max Forward 950   Min Back -4425
+Width between Max 7150          Min 650
+
+*/
+
+
+
+
 //bool errorFlag;
 const int AS5048A_CLEAR_ERROR_FLAG              = 0x0001;
 const int AS5048A_PROGRAMMING_CONTROL           = 0x0003;
@@ -30,8 +41,8 @@ const int AS5048A_ANGLE                         = 0x3FFF;
 #define DISABLE_STEPPER_DRIVER_INTERRUPT() TIMSK1 &= ~(1<<OCIE1A)
 
 int foreArmSteps, mainArmSteps, rotationalSteps;
-int foreArmTarget, mainArmTarget, rotationalTarget;
-int foreArmPos, mainArmPos, rotationalPos;
+float foreArmTarget, mainArmTarget, rotationalTarget;
+float foreArmPos, mainArmPos, rotationalPos;
 
 int halfStepDurationMS = 1200;                          // Calculated value to set 1/2 step pulse timer (mS x 2)
 
@@ -39,71 +50,48 @@ long stepsLeft = 0;                                  // Number of Steps
 boolean running = false;                             // Arm moving?
 
 long timeNow = 0;
-long cycleTime = 1000;
+long cycleTime = 2;
 //int xPos, yPos, zPos;
 
 void setup()
 {
   initSteppers();
   //initEndstops();
-  AS5048Ainit();
+  
 
   Serial.begin(115200);
   Serial.setTimeout(10);
   Serial.println("#project Armed");
   Serial.println("Enter m=MainArm,f=ForeArm,s=Step speed, e=enable/disable");
 
-
+  AS5048Ainit();
   setTimer1(halfStepDurationMS);
 
-
+  
 
   //gotoHome();
   //test90();
   //foreArmPos = -1075;
   //mainArmPos = 0;
-
+  for(byte i = 0; i < 10; i++){  //Fill the angleAverage filter
+    getRotation();
+    delay(200);
+  }
+  printAngle();
 }
 
-void drawSquare()
-{
-  goDirectlyTo(0, 100, 0);
-  delay(1000);
-  for (byte i = 100; i <= 200; i++) {
-    //delay(10);
-    while (running == true) {
-      delay(1);
-    } //wait for move to complete
-    goDirectlyTo(0, i, 0);
-  }
-  for (byte i = 0; i <= 100; i++) {
-    while (running == true) {
-      delay(1);
-    } //wait for move to complete
-    goDirectlyTo(0, 200, i);
-  }
-  for (byte i = 200; i >= 100; i--) {
-    while (running == true) {
-      delay(1);
-    } //wait for move to complete
-    goDirectlyTo(0, i, 100);
-  }
-  for (byte i = 100; i >= 0; i--) {
-    while (running == true) {
-      delay(1);
-    } //wait for move to complete
-    goDirectlyTo(0, 100, i);
-  }
-
-}
+//g1,0,200,170 //Main arm straight
 //long timeLast = 0;
-
-
+//m2000
+//f4000
+//g1,0,270,160 UP & extended
+//g1,0,100,-100
 void loop ()
 {
   static boolean lastRunState = false;
   if (running != lastRunState) {
     Serial.println("Move Complete");
+    printAngle();
     if (lastRunState == true) {
       steppersEnabled(false);
     }
@@ -116,62 +104,108 @@ void loop ()
 
     Serial.print(amount);
     Serial.println(cmd);
-    if (cmd == 'm') {
-
-      //digitalWrite(MAINARM_ENABLE_PIN    , LOW);
+    if (cmd == 'p') {
+      
+      printAngle();
+      
+    } else if (cmd == 'a') {
+      
+      
+      moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, 1000);
+      moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, 1000);
+      moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, 1000);
+      moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, -2000);
+      moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, -2000);
+      moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, -2000);
+      moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, 1000);
+      moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, 1000);
+      moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, 1000);
+    } else if (cmd == 'b') {
+      
+      digitalWrite(ROTATION_ENABLE_PIN    , LOW);
+      boolean targetDir = (amount >= 0) ? LOW : HIGH;
+      digitalWrite(ROTATION_DIR_PIN, targetDir);
+      amount = abs(amount);
+      for(int i = 0; i < amount; i++){
+         digitalWrite(ROTATION_STEP_PIN, HIGH);
+         delay(1);      
+         digitalWrite(ROTATION_STEP_PIN, LOW);
+         delay(1);
+      }
+      digitalWrite(ROTATION_ENABLE_PIN    , HIGH);
+      printAngle();
+      
+    } else if (cmd == 'm') {
+      
+      digitalWrite(MAINARM_ENABLE_PIN    , LOW);
       boolean targetDir = (amount >= 0) ? LOW : HIGH;
       digitalWrite(MAINARM_DIR_PIN, targetDir);
-      mainArmSteps = amount;
-      mainArmSteps = abs(mainArmSteps);
-      Serial.print("Moving steps: "); Serial.print(mainArmSteps);
-      running = true;
-      steppersEnabled(true);
-      ENABLE_STEPPER_DRIVER_INTERRUPT();
-      //while(running==true){}
-      Serial.print("DONE with halfStepDurationMS set to "); Serial.print(halfStepDurationMS);
-      //digitalWrite(MAINARM_ENABLE_PIN    , HIGH);
+      amount = abs(amount);
+      for(int i = 0; i < amount; i++){
+         digitalWrite(MAINARM_STEP_PIN, HIGH);
+         delay(1);      
+         digitalWrite(MAINARM_STEP_PIN, LOW);
+         delay(1);
+      }
+      digitalWrite(MAINARM_ENABLE_PIN    , HIGH);
+      printAngle();
+      
     } else if (cmd == 'f') {
-      //digitalWrite(FOREARM_ENABLE_PIN    , LOW);
+      
+      digitalWrite(FOREARM_ENABLE_PIN    , LOW);
       boolean targetDir = (amount >= 0) ? HIGH : LOW;
       digitalWrite(FOREARM_DIR_PIN, targetDir);
-      foreArmSteps = amount;
-      foreArmSteps = abs(foreArmSteps);
-      Serial.print("Moving steps: "); Serial.print(foreArmSteps);
-      running = true;
-      steppersEnabled(true);
-      ENABLE_STEPPER_DRIVER_INTERRUPT();
-      //while(running==true){}
-      Serial.print("DONE with halfStepDurationMS set to "); Serial.print(halfStepDurationMS);
-      //digitalWrite(FOREARM_ENABLE_PIN    , HIGH);
+      amount = abs(amount);
+      for(int i = 0; i < amount; i++){
+         digitalWrite(FOREARM_STEP_PIN, HIGH);
+         delay(1);      
+         digitalWrite(FOREARM_STEP_PIN, LOW);
+         delay(1);
+      }
+      digitalWrite(FOREARM_ENABLE_PIN    , HIGH);
+      printAngle();
+      
     } else if (cmd == 's') {
+      
       halfStepDurationMS = amount;
       setTimer1(halfStepDurationMS);
       Serial.print("halfStepDurationMS set to "); Serial.println(halfStepDurationMS);
+      
     } else if (cmd == 'e') {
-      steppersEnabled(false);
-    }
+      
+      boolean state = (amount <= 0) ? LOW : HIGH;
+      steppersEnabled(state);
+      
+    } else if (cmd == 'g') {
 
-    /*
+    
       int getForeArmTarget = Serial.parseInt();
       int getMainArmTarget = Serial.parseInt();
       int getRotationalTarget = Serial.parseInt();
-
+      printAngle();
       Serial.print("Converting from Cartesian : ");
       Serial.print(getForeArmTarget);  Serial.print(" : ");
       Serial.print(getMainArmTarget);  Serial.print(" : ");
       Serial.println(getRotationalTarget);
       Serial.println("Moving Steppers To...");
-
+    
       goDirectlyTo(getForeArmTarget,getMainArmTarget,getRotationalTarget);
-    */
+    }
+    
   }
+  
+  
   if (millis() - timeNow > cycleTime) {
+    //static byte cnt = 0;
     getRotation();
+    //cnt++;
     /*word foreArmAngle, mainArmAngle;
-    getArmAngles(&foreArmAngle, &mainArmAngle);
-    Serial.print(foreArmAngle);
-    Serial.print(" : ");
-    Serial.println(mainArmAngle);*/
+    getArmAngles(&foreArmAngle, &mainArmAngle);*/
+    //if(cnt == 100){
+      
+    //  cnt = 0;
+    //}
+    //printAvgAngle();
     timeNow = millis();
   }
   /*static bool travel = 1;
@@ -185,8 +219,55 @@ void loop ()
       travel = !travel;
     }
     } */
+    static long demoCycle = 60000*5;
+static long demoTime = -demoCycle;
+  if (millis() - demoTime > demoCycle) {
+    //static byte cnt = 0;
+    //getRotation();
+    //cnt++;
+    /*word foreArmAngle, mainArmAngle;
+    getArmAngles(&foreArmAngle, &mainArmAngle);*/
+    //if(cnt == 100){
+      
+    //  cnt = 0;
+    //}
+    //printAvgAngle();
+    demoTime = millis();
+    //demoMode();
+  }
+  
+}
 
+void demoMode(){
+  moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, 1000);
+  moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, 1000);
+  moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, 1000);
+  moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, -2000);
+  moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, -2000);
+  moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, -2000);
+  moveLimb(ROTATION_ENABLE_PIN, ROTATION_STEP_PIN, ROTATION_DIR_PIN, 1000);
+  moveLimb(MAINARM_ENABLE_PIN, MAINARM_STEP_PIN, MAINARM_DIR_PIN, 1000);
+  moveLimb(FOREARM_ENABLE_PIN, FOREARM_STEP_PIN, FOREARM_DIR_PIN, 1000);
+}
 
+void moveLimb(byte enablePin, byte stepPin, byte dirPin, int amount){
+  digitalWrite(enablePin    , LOW);
+  boolean targetDir = (amount >= 0) ? LOW : HIGH;
+  digitalWrite(dirPin, targetDir);
+  amount = abs(amount);
+  for(int i = 0; i < amount; i++){
+     digitalWrite(stepPin, HIGH);
+     delay(1);      
+     digitalWrite(stepPin, LOW);
+     delay(1);
+  }
+  digitalWrite(enablePin    , HIGH);
+}
+
+void printAngle(){
+  Serial.print(foreArmPos);
+  Serial.print(" : ");
+  Serial.println(mainArmPos);
 }
 
 void test90()
